@@ -1,0 +1,79 @@
+---
+- hosts: all
+  become: true
+
+  roles:
+    - raspbian_bootstrap
+    - firewall
+
+  vars:
+    ansible_user: "pi"
+    #ansible_ssh_private_key_file: "keys/id_rsa"
+    #dbs_ssh_pubkey: "{{ lookup('file', 'keys/id_rsa.pub') }}"
+
+    dbs_set_hostname: true
+    dbs_set_locale: true
+    dbs_set_timezone: true
+    dbs_set_ntp: true
+    dbs_hostname: "{{ inventory_hostname }}"
+    dbs_default_locale: "en_GB.UTF-8"
+    dbs_locales:
+      - "en_GB.UTF-8"
+    dbs_timezone: "Europe/London"
+
+    open_ports:
+      - "ssh"
+
+  vars_prompt:
+    - name: hostname
+      prompt: "please enter a hostname for your new device:"
+      private: no
+    - name: wifi_ssid
+      prompt: "please enter the WiFi SSID for your new device:"
+      private: no
+    - name: wifi_password
+      prompt: "please enter the WiFi password for your new device:"
+      private: yes
+    - name: "password"
+      prompt: "Enter new password for user pi"
+      private: yes
+
+tasks:
+
+    # Expand the filesystem
+    - include: ../tasks/expand-filesystem.yml
+      tags: setup
+
+    # Set Internationalization Options
+    - include: ../tasks/internationalization.yml
+      tags: setup
+
+    # Set WiFi Options
+    - include: ../tasks/wifi.yml
+      tags: setup
+
+    - name: Create SSH folder
+      file: path=~/.ssh state=directory
+
+    - name: Set up SSH Key from a template
+      template: src=../templates/authorized_keys dest=~/.ssh/authorized_keys
+
+    - name: run 'dpkg --configure -a'
+      become: yes
+      command: dpkg --configure -a
+
+    # Run apt-get update and apt-get upgrade 
+    - include: ../tasks/update.yml
+      tags: update
+
+    # Set the hostname
+    - include: ../tasks/hostname.yml
+      tags: setup
+
+  handlers:
+
+    - include: ../handlers/reboot.yml
+      tags: system
+
+    - include: ../handlers/tzdata.yml
+      tags: system
